@@ -7,6 +7,7 @@ import com.kafka.examples.domain.Order;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -20,19 +21,21 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongSerializer;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.Properties;
 import java.util.stream.IntStream;
 
+import static com.kafka.examples.constants.Constants.*;
+
 public class KafkaAccessor<L extends Number, O> {
 
-    private final static String TOPIC = "order";
+    private static String TOPIC = "";
 
-    private static Producer<Long, Order> createProducer() {
+    private static Producer<Long, Order> createProducer(Properties properties) {
+        TOPIC = properties.getProperty(KAFKA_TOPIC);
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "35.227.104.191:9092");
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "AvroProducer");
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getProperty(KAFKA_BOOTSTRAP_SERVER));
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, PRODUCER);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 LongSerializer.class.getName());
 
@@ -41,26 +44,43 @@ public class KafkaAccessor<L extends Number, O> {
                 KafkaAvroSerializer.class.getName());
 
         props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, true);
-        props.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, "full");
+        props.put(SchemaRegistryConfig.COMPATIBILITY_CONFIG, properties.getProperty(AVRO_COMPATIBILITY));
 
-        props.put("avro.compatibility.level", "full");
+        props.put(KafkaAvroSerializerConfig.VALUE_SUBJECT_NAME_STRATEGY, TopicNameStrategy.class);
+        props.put(KafkaAvroSerializerConfig.KEY_SUBJECT_NAME_STRATEGY, TopicNameStrategy.class);
         // Schema Registry location.
         props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
-                "http://35.227.104.191:8081");
+                properties.getProperty(SCHEMA_REGISTRY_URL));
         return new KafkaProducer<Long, Order>(props);
 
     }
 
 
-    static Schema schemaProvider(Class object) throws JsonMappingException {
+    private static Schema schemaProvider(Class object) throws JsonMappingException {
 
         Schema schema = ReflectData.get().getSchema(object);
 
         return schema;
     }
 
-    public static void main(String... args) {
-        Producer<Long, Order> producer = createProducer();
+    public static void main(String args[]) throws Exception {
+
+        if (args.length < 1) {
+            throw new Exception("Pass application.config file path..");
+        }
+
+        File applicationConfigPath = new File(args[0]);
+        Properties properties = new Properties();
+        InputStream ins = new FileInputStream(applicationConfigPath);
+        try {
+            properties.load(ins);
+        } catch (Exception e) {
+            System.out.println("Error while reading config file");
+            e.printStackTrace();
+        }
+
+
+        Producer<Long, Order> producer = createProducer(properties);
         Customer customer = new Customer(1234, "Onkar Pathak", 25, "Male", true);
         Address shippingAddress = new Address("line1 address", "line 2 address", "MH", "Pune", "IN", 411006);
         Address billingAddress = new Address("line1234 address", "line 2456 address", "MH", "Mumbai", "IN", 40064);
