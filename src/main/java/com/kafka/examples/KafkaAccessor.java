@@ -15,6 +15,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumWriter;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -30,6 +32,28 @@ import static com.kafka.examples.constants.Constants.*;
 public class KafkaAccessor<L extends Number, O> {
 
     private static String TOPIC = "";
+
+    private static KafkaConsumer createConsumer(Properties properties) {
+        TOPIC = properties.getProperty(KAFKA_TOPIC);
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getProperty(KAFKA_BOOTSTRAP_SERVER));
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, PRODUCER);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                LongSerializer.class.getName());
+
+        // Configure the KafkaAvroSerializer.
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                KafkaAvroSerializer.class.getName());
+
+        // Schema Registry location.
+        props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG,
+                properties.getProperty(SCHEMA_REGISTRY_URL));
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1000);
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        return new KafkaConsumer<Long, Order>(props);
+    }
 
     private static Producer<Long, Order> createProducer(Properties properties) {
         TOPIC = properties.getProperty(KAFKA_TOPIC);
@@ -86,7 +110,7 @@ public class KafkaAccessor<L extends Number, O> {
         Address billingAddress = new Address("line1234 address", "line 2456 address", "MH", "Mumbai", "IN", 40064);
 
         Order order = new Order(12345, customer, 2754.65, "Shipped", shippingAddress, false);
-        IntStream.range(1, 2).forEach(index -> {
+        IntStream.range(1, 50).forEach(index -> {
 
             Schema schema = null;
             try {
@@ -118,11 +142,20 @@ public class KafkaAccessor<L extends Number, O> {
                 e.printStackTrace();
             }
 
+            System.out.println("Publishing message " + index + " on topic --> " + record.getSchema().toString());
             producer.send(new ProducerRecord(TOPIC, 100L * index, record));
+
         });
 
         producer.flush();
         producer.close();
+
+//        KafkaConsumer consumer = createConsumer(properties);
+//        consumer.subscribe(Collections.singletonList(TOPIC
+//
+//        ));
+//        ConsumerRecords<Long, Order> records = consumer.poll(20000);
+//        records.iterator().forEachRemaining(record -> System.out.println(record.key() + " --> " + record.value()));
     }
 
 

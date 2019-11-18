@@ -40,3 +40,33 @@ dependencies {
     // https://mvnrepository.com/artifact/io.confluent/kafka-schema-registry
     compile group: 'io.confluent', name: 'kafka-schema-registry', version: '4.1.0'
 }
+
+
+jar {
+//    mergeServiceFiles()
+    manifest {
+        attributes 'Main-Class': "com.kafka.examples.KafkaAccessor"
+    }
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+
+task customFatJar(type: org.gradle.jvm.tasks.Jar) {
+    baseName = "kafka-schema-registry"
+    version = "1.0.0"
+    classifier = ''
+    manifest {
+        attributes(
+                'Main-Class': "com.kafka.examples.KafkaAccessor"
+        )
+    }
+
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+
+    }
+    with jar
+
+}

@@ -5,14 +5,12 @@ public class Customer {
     String name;
     int age;
     String gender;
-    boolean isPrime;
 
     public Customer(int id, String name, int age, String gender, boolean isPrime) {
         this.id = id;
         this.name = name;
         this.age = age;
         this.gender = gender;
-        this.isPrime = isPrime;
     }
 
     public int getId() {
