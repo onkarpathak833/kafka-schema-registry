@@ -10,6 +10,10 @@ public class Order {
     Address billingAddress;
     boolean isGift;
 
+    public Order() {
+
+    }
+
     public Order(int id, Customer customer, Double orderTotal, String status, Address shippingAddress, boolean isGift) {
         this.id = id;
         this.customer = customer;

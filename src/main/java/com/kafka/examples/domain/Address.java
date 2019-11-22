@@ -8,6 +8,10 @@ public class Address {
     String country;
     long pinCode;
 
+    public Address() {
+
+    }
+
     public Address(String line1, String line2, String state, String district, String country, long pinCode) {
         this.line1 = line1;
         this.line2 = line2;

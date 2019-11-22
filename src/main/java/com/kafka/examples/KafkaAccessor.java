@@ -11,6 +11,7 @@ import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
 import org.apache.avro.reflect.ReflectData;
@@ -18,14 +19,14 @@ import org.apache.avro.reflect.ReflectDatumWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.io.*;
 import java.util.Properties;
-import java.util.stream.IntStream;
+import java.util.Random;
 
 import static com.kafka.examples.constants.Constants.*;
 
@@ -55,7 +56,18 @@ public class KafkaAccessor<L extends Number, O> {
         return new KafkaConsumer<Long, Order>(props);
     }
 
-    private static Producer<Long, Order> createProducer(Properties properties) {
+
+    private static KafkaProducer<String, String> createSimpleProducer(Properties properties) {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getProperty(KAFKA_BOOTSTRAP_SERVER));
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, PRODUCER);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        return new KafkaProducer<String, String>(props);
+
+    }
+
+    private static KafkaProducer<Long, Order> createProducer(Properties properties) {
         TOPIC = properties.getProperty(KAFKA_TOPIC);
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getProperty(KAFKA_BOOTSTRAP_SERVER));
@@ -87,31 +99,25 @@ public class KafkaAccessor<L extends Number, O> {
         return schema;
     }
 
-    public static void main(String args[]) throws Exception {
+    private static void generateKafkaMessages(KafkaProducer<String, String> producer) {
 
-        if (args.length < 1) {
-            throw new Exception("Pass application.config file path..");
+        for (int i = 0; i < 20; i++) {
+            String randomString = "Hello World there -->" + i;
+            ProducerRecord record = new ProducerRecord("test", String.valueOf(i * 12), randomString);
+            System.out.println("Produced Message : " + record);
+            producer.send(record);
         }
 
-        File applicationConfigPath = new File(args[0]);
-        Properties properties = new Properties();
-        InputStream ins = new FileInputStream(applicationConfigPath);
-        try {
-            properties.load(ins);
-        } catch (Exception e) {
-            System.out.println("Error while reading config file");
-            e.printStackTrace();
-        }
+        producer.flush();
+        producer.close();
+    }
 
+    private static void generateGenericRecordMessages(KafkaProducer<Long, Order> producer) {
+        Order order = getOrder();
 
-        Producer<Long, Order> producer = createProducer(properties);
-        Customer customer = new Customer(1234, "Onkar Pathak", 25, "Male", true);
-        Address shippingAddress = new Address("line1 address", "line 2 address", "MH", "Pune", "IN", 411006);
-        Address billingAddress = new Address("line1234 address", "line 2456 address", "MH", "Mumbai", "IN", 40064);
+        for (int i = 0; i < 1; i++) {
 
-        Order order = new Order(12345, customer, 2754.65, "Shipped", shippingAddress, false);
-        IntStream.range(1, 50).forEach(index -> {
-
+            int randomKey = new Random().nextInt(188999);
             Schema schema = null;
             try {
                 schema = schemaProvider(Order.class);
@@ -120,7 +126,7 @@ public class KafkaAccessor<L extends Number, O> {
             }
             GenericRecord record = new GenericData.Record(schema);
 
-            ReflectDatumWriter<Order> datumWriter = new ReflectDatumWriter<>(schema);
+            GenericDatumWriter<Order> datumWriter = new ReflectDatumWriter<>(schema);
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
             BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(outputStream, null);
@@ -138,24 +144,54 @@ public class KafkaAccessor<L extends Number, O> {
 
             try {
                 record = datumReader.read(null, decoder);
+                System.out.println("Record Generated is : " + record);
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            System.out.println("Publishing message " + index + " on topic --> " + record.getSchema().toString());
-            producer.send(new ProducerRecord(TOPIC, 100L * index, record));
+            System.out.println("Publishing message " + i + " on topic --> " + record.getSchema().toString());
+            producer.send(new ProducerRecord(TOPIC, (100L * i) + randomKey, record));
 
-        });
 
+        }
         producer.flush();
         producer.close();
+    }
 
-//        KafkaConsumer consumer = createConsumer(properties);
-//        consumer.subscribe(Collections.singletonList(TOPIC
-//
-//        ));
-//        ConsumerRecords<Long, Order> records = consumer.poll(20000);
-//        records.iterator().forEachRemaining(record -> System.out.println(record.key() + " --> " + record.value()));
+    private static Order getOrder() {
+        Customer customer = new Customer(1234, "Onkar Pathak", 25, "Male", true);
+        Address shippingAddress = new Address("line1 address", "line 2 address", "MH", "Pune", "IN", 411006);
+        Address billingAddress = new Address("line1234 address", "line 2456 address", "MH", "Mumbai", "IN", 40064);
+        return new Order(12345, customer, 2754.65, "Shipped", shippingAddress, false);
+    }
+
+
+    public static void main(String args[]) throws Exception {
+
+        if (args.length < 1) {
+            throw new Exception("Pass application.config file path..");
+        }
+
+        File applicationConfigPath = new File(args[0]);
+        Properties properties = new Properties();
+        InputStream ins = new FileInputStream(applicationConfigPath);
+        try {
+            properties.load(ins);
+        } catch (Exception e) {
+            System.out.println("Error while reading config file");
+            e.printStackTrace();
+        }
+
+
+        try {
+            KafkaProducer<String, String> producer = createSimpleProducer(properties);
+            //generateKafkaMessages(producer);
+
+            KafkaProducer<Long, Order> avroProducer = createProducer(properties);
+            generateGenericRecordMessages(avroProducer);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 

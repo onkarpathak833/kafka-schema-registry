@@ -6,6 +6,9 @@ public class Customer {
     int age;
     String gender;
 
+    public  Customer(){
+
+    }
     public Customer(int id, String name, int age, String gender, boolean isPrime) {
         this.id = id;
         this.name = name;
